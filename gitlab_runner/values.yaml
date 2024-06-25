@@ -61,7 +61,7 @@ gitlabUrl: http://51.250.1.133/
 ## be retrieved from your GitLab instance. It is the token of an already registered runner.
 ## ref: (we don't have docs for that yet, but we want to use an existing token)
 ##
-runnerToken: "glrt-XoCL55ps4i-GoEGErE2p"
+runnerToken: "glrt-MFKyv3zmyxpxuDwKQd2z"
 #
 
 ## Unregister all runners before termination

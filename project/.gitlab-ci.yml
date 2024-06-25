@@ -1,0 +1,41 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  DOCKER_HOST: "tcp://localhost:2376"
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_TLS_VERIFY: "1"
+  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+  CI_REGISTRY_USER: "ret2701"
+  CI_REGISTRY_PASSWORD: "*****"
+  CI_REGISTRY: "https://index.docker.io/v1/"
+  CI_REGISTRY_IMAGE: "ret2701/churilov-test"
+  
+build:
+  image: docker:24.0.2-git
+  stage: build
+  services:
+    - docker:24.0.2-dind-alpine3.18
+  before_script:
+    - sleep 30
+   
+  script:
+    - if [ -z "$CI_COMMIT_TAG" ]; then GIT_TAG='main'; else GIT_TAG=$CI_COMMIT_TAG; fi
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE:$GIT_TAG .
+    - docker push $CI_REGISTRY_IMAGE:$GIT_TAG
+  tags:
+    - kuber
+
+deploy:
+  stage: deploy
+  image: bitnami/kubectl:1.29.6
+  script:
+    - sed -i "s/TAG/$CI_COMMIT_TAG/" test.yaml
+    - kubectl apply -f test.yaml
+  tags:
+    - kuber
+  rules:
+    - if: $CI_COMMIT_TAG
+

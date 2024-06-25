@@ -1,0 +1,39 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: test-app
+  name: test-app
+  namespace: test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-app
+  template:
+    metadata:
+      labels:
+        app: test-app
+    spec:
+      containers:
+        - image: ret2701/churilov-test:main
+          imagePullPolicy: IfNotPresent
+          name: test-app
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-app
+  namespace: test
+spec:
+  ports:
+    - name: web
+      port: 80
+      targetPort: 80
+      nodePort: 31183
+  selector:
+    app: test-app
+  type: NodePort

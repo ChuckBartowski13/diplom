@@ -52,7 +52,9 @@
 ###Ответ:
 В качестве Backend использовал S3:
 ![diplom](src/s3.png)
+[s3](https://github.com/ChuckBartowski13/diplom/tree/main/terraform/backend_bucket)
 Команды terraform выполняются - доказано в след пункте.
+Сети также создаются при создании инфраструктуры
 
 
 ---
@@ -76,7 +78,7 @@
 2. В файле `~/.kube/config` находятся данные для доступа к кластеру.
 3. Команда `kubectl get pods --all-namespaces` отрабатывает без ошибок.
 
-###Ответ:
+Ответ:
 С помощью terraform, kubespray и своего ansible для gitlab развернул структуру из 4-ех ВМ:
 контрол ноды, 
 2-ух воркеров,
@@ -197,6 +199,7 @@ kube-system   nodelocaldns-x5qwk                         1/1     Running   0    
 ret@ret-vm:~/diplom/terraform$ 
 ```
 LENS также нормально все отображает:
+
 ![diplom](src/pic_lens.png)
 ---
 ### Создание тестового приложения
@@ -215,6 +218,10 @@ LENS также нормально все отображает:
 
 1. Git репозиторий с тестовым приложением и Dockerfile.
 2. Регистри с собранным docker image. В качестве регистри может быть DockerHub или [Yandex Container Registry](https://cloud.yandex.ru/services/container-registry), созданный также с помощью terraform.
+
+Ответ:
+1. [Git репозиторий](https://github.com/ChuckBartowski13/diplom/blob/main/docker/content/index.html) с тестовым приложением и [Dockerfile](https://github.com/ChuckBartowski13/diplom/blob/main/docker/Dockerfile).
+2. [Регистр с собранным docker image](https://hub.docker.com/repository/docker/ret2701/churilov-test/tags). В качестве регистра использовал DockerHub.
 
 ---
 ### Подготовка cистемы мониторинга и деплой приложения
@@ -237,6 +244,132 @@ LENS также нормально все отображает:
 3. Дашборды в grafana отображающие состояние Kubernetes кластера.
 4. Http доступ к тестовому приложению.
 
+Ответ:
+Воспользовался kube-prometheus:
+```
+ret@ret-vm:~/diplom/terraform$ helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+"prometheus-community" already exists with the same configuration, skipping
+ret@ret-vm:~/diplom/terraform$ kubectl create ns monitoring
+namespace/monitoring created
+ret@ret-vm:~/diplom/terraform$ helm install stable prometheus-community/kube-prometheus-stack --namespace=monitoring
+NAME: stable
+LAST DEPLOYED: Wed Jun 26 01:30:58 2024
+NAMESPACE: monitoring
+STATUS: deployed
+REVISION: 1
+NOTES:
+kube-prometheus-stack has been installed. Check its status by running:
+  kubectl --namespace monitoring get pods -l "release=stable"
+
+Visit https://github.com/prometheus-operator/kube-prometheus for instructions on how to create & configure Alertmanager and Prometheus instances using the Operator.
+ret@ret-vm:~/diplom/terraform$ 
+```
+Доступ организовал так (с локальной машины глючил редактор):
+```
+# Please edit the object below. Lines beginning with a '#' will be ignored,
+# and an empty file will abort the edit. If an error occurs while saving this file will be
+# reopened with the relevant failures.
+#
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    meta.helm.sh/release-name: stable
+    meta.helm.sh/release-namespace: monitoring
+  creationTimestamp: "2024-06-25T22:31:41Z"
+  labels:
+    app.kubernetes.io/instance: stable
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/version: 11.0.0
+    helm.sh/chart: grafana-8.0.2
+  name: stable-grafana
+  namespace: monitoring
+  resourceVersion: "11968"
+  uid: 019442a1-b128-4ffe-aa87-195d17ab7ebb
+spec:
+  clusterIP: 10.233.4.210
+  clusterIPs:
+  - 10.233.4.210
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: http-web
+    port: 80
+    protocol: TCP
+    targetPort: 3000
+    nodePort: 31179
+  selector:
+    app.kubernetes.io/instance: stable
+    app.kubernetes.io/name: grafana
+  sessionAffinity: None
+  type: NodePort
+status:
+  loadBalancer: {}
+
+root@kub-cp-0:/home/ubuntu# kubectl edit svc stable-grafana -n monitoring
+service/stable-grafana edited
+
+```
+Снаружи доступен
+admin
+prom-operator
+![diplom](src/grafana.png)
+
+Тестовое приложение также доступно:
+```
+ret@ret-vm:~/DIPLOM$ kubectl create ns test
+namespace/test created
+ret@ret-vm:~/DIPLOM$ kubectl apply -f diplom/test.yaml
+deployment.apps/test-app created
+service/test-app created
+ret@ret-vm:~/DIPLOM$ cat diplom/test.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: test-app
+  name: test-app
+  namespace: test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-app
+  template:
+    metadata:
+      labels:
+        app: test-app
+    spec:
+      containers:
+        - image: ret2701/churilov-test:main
+          imagePullPolicy: IfNotPresent
+          name: test-app
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-app
+  namespace: test
+spec:
+  ports:
+    - name: web
+      port: 80
+      targetPort: 80
+      nodePort: 31183
+  selector:
+    app: test-app
+  type: NodePort
+ret@ret-vm:~/DIPLOM$ 
+
+```
+![diplom](src/test1.png)
+![diplom](src/test2.png)
 ---
 ### Установка и настройка CI/CD
 
@@ -250,11 +383,125 @@ LENS также нормально все отображает:
 Можно использовать [teamcity](https://www.jetbrains.com/ru-ru/teamcity/), [jenkins](https://www.jenkins.io/), [GitLab CI](https://about.gitlab.com/stages-devops-lifecycle/continuous-integration/) или GitHub Actions.
 
 Ожидаемый результат:
-у
 1. Интерфейс ci/cd сервиса доступен по http.
 2. При любом коммите в репозиторие с тестовым приложением происходит сборка и отправка в регистр Docker образа.
 3. При создании тега (например, v1.0.0) происходит сборка и отправка с соответствующим label в регистри, а также деплой соответствующего Docker образа в кластер Kubernetes.
 
+Ответ:
+Узнаем пароль от gitlab
+```
+ret@ret-vm:~/DIPLOM$ ssh ubuntu@51.250.1.133
+Welcome to Ubuntu 22.04.4 LTS (GNU/Linux 5.15.0-107-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Jun 25 10:59:09 PM UTC 2024
+
+  System load:  0.23               Processes:             218
+  Usage of /:   39.5% of 19.59GB   Users logged in:       0
+  Memory usage: 87%                IPv4 address for eth0: 10.128.0.11
+  Swap usage:   0%
+
+
+Expanded Security Maintenance for Applications is not enabled.
+
+13 updates can be applied immediately.
+To see these additional updates run: apt list --upgradable
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+
+
+*** System restart required ***
+Last login: Tue Jun 25 20:32:29 2024 from 89.113.153.154
+ubuntu@gitlab:~$ sudo docker exec -it gitlab grep 'Password:' /etc/gitlab/initial_root_password
+Password: /C1UHACeq7Ep7Kx9mVbJp+OYaMgoECOaM/h38k7dliQ=
+ubuntu@gitlab:~$ 
+```
+Заходим 
+![diplom](src/gitlab1.png)
+Создаем runner-а
+![diplom](src/gitlab2.png)
+и вносим token в [конфиг раннера](https://github.com/ChuckBartowski13/diplom/blob/main/gitlab_runner/values.yaml)
+Регистрируем его в кубе
+```
+ret@ret-vm:~/DIPLOM/diplom$ helm repo add gitlab https://charts.gitlab.io
+"gitlab" already exists with the same configuration, skipping
+ret@ret-vm:~/DIPLOM/diplom$ kubectl create ns gitlab
+namespace/gitlab created
+ret@ret-vm:~/DIPLOM/diplom$ helm upgrade --install kub-runner -n gitlab --version 0.65.0 -f values.yaml gitlab/gitlab-runner
+Release "kub-runner" does not exist. Installing it now.
+Error: open values.yaml: no such file or directory
+ret@ret-vm:~/DIPLOM/diplom$ ls
+docker  gitlab_runner  kubespray  README.md  src  terraform  test.yaml
+ret@ret-vm:~/DIPLOM/diplom$ cd gitlab_runner/
+ret@ret-vm:~/DIPLOM/diplom/gitlab_runner$ helm upgrade --install kub-runner -n gitlab --version 0.65.0 -f values.yaml gitlab/gitlab-runner
+Release "kub-runner" does not exist. Installing it now.
+NAME: kub-runner
+LAST DEPLOYED: Wed Jun 26 02:11:09 2024
+NAMESPACE: gitlab
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+Your GitLab Runner should now be registered against the GitLab instance reachable at: "http://51.250.1.133/"
+
+Runner namespace "gitlab" was found in runners.config template.
+ret@ret-vm:~/DIPLOM/diplom/gitlab_runner$ 
+
+```
+В gitlab он активен
+![diplom](src/gitlab3.png)
+Создаем проект и наполняем его
+[проект](https://github.com/ChuckBartowski13/diplom/tree/main/project)
+![diplom](src/gitlab4.png)
+При коммите с тэгом происходит сборка и деплой проекта
+```
+et@ret-vm:~$ git add .
+fatal: not a git repository (or any of the parent directories): .git
+ret@ret-vm:~$ cd test
+ret@ret-vm:~/test$ git add .
+ret@ret-vm:~/test$ git commit
+[main 7046187] first
+ 5 files changed, 128 insertions(+)
+ create mode 100644 .gitlab-ci.yml
+ create mode 100644 Dockerfile
+ create mode 100644 config/nginx.conf
+ create mode 100644 content/index.html
+ create mode 100644 test.yaml
+ret@ret-vm:~/test$ git tag v1.0.20
+ret@ret-vm:~/test$ git push origin tag v.1.0.20
+error: src refspec refs/tags/v.1.0.20 does not match any
+error: failed to push some refs to 'http://51.250.1.133/root/test.git'
+ret@ret-vm:~/test$ git push origin tag v1.0.20
+Username for 'http://51.250.1.133': 
+Password for 'http://51.250.1.133': 
+remote: HTTP Basic: Access denied. The provided password or token is incorrect or your account has 2FA enabled and you must use a personal access token instead of a password. See http://51.250.1.133/help/topics/git/troubleshooting_git#error-on-git-fetch-http-basic-access-denied
+fatal: Authentication failed for 'http://51.250.1.133/root/test.git/'
+ret@ret-vm:~/test$ git push origin tag v1.0.20
+Username for 'http://51.250.1.133': root
+Password for 'http://root@51.250.1.133': 
+Enumerating objects: 10, done.
+Counting objects: 100% (10/10), done.
+Delta compression using up to 4 threads
+Compressing objects: 100% (7/7), done.
+Writing objects: 100% (9/9), 1.84 KiB | 1.84 MiB/s, done.
+Total 9 (delta 0), reused 0 (delta 0), pack-reused 0
+To http://51.250.1.133/root/test.git
+ * [new tag]         v1.0.20 -> v1.0.20
+ret@ret-vm:~/test$ 
+
+```
+![diplom](src/gitlab5.png)
+![diplom](src/gitlab6.png)
+![diplom](src/gitlab7.png)
+![diplom](src/gitlab8.png)
+![diplom](src/gitlab9.png)
+![diplom](src/gitlab10.png)
+
+Если тэг не указан - происходит сборка образа с тэгом main
 ---
 ## Что необходимо для сдачи задания?
 
