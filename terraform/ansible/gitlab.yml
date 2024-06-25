@@ -1,0 +1,84 @@
+---
+- name: Install Docker gitlab
+  hosts: all
+  become: true
+  tasks:
+    - name: Disable firewall
+      ansible.builtin.command: 
+        ufw disable
+      register: my_output
+      changed_when: my_output.rc != 0      
+      
+    - name: Install repo1
+      ansible.builtin.command:
+        apt-get update
+      register: my_output
+      changed_when: my_output.rc != 0
+
+    - name: Install repo2
+      ansible.builtin.command: 
+        apt-get install ca-certificates curl
+      register: my_output
+      changed_when: my_output.rc != 0 
+      
+    - name: Install repo3
+      ansible.builtin.command: 
+        install -m 0755 -d /etc/apt/keyrings
+      register: my_output
+      changed_when: my_output.rc != 0 
+      
+    - name: Install repo4
+      ansible.builtin.command: 
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+      register: my_output
+      changed_when: my_output.rc != 0 
+
+    - name: Install repo5
+      ansible.builtin.command: 
+        chmod a+r /etc/apt/keyrings/docker.asc
+      register: my_output
+      changed_when: my_output.rc != 0 
+
+    - name: Install repo6
+      ansible.builtin.command: 
+        'echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null'
+      register: my_output
+      changed_when: my_output.rc != 0 
+
+    - name: Install repo7
+      ansible.builtin.command: 
+        apt-get update
+      register: my_output
+      changed_when: my_output.rc != 0 
+
+
+    - name: Install docker
+      ansible.builtin.command: 
+        apt-get install -y docker.io
+      register: my_output
+      changed_when: my_output.rc != 0 
+
+    - name: Create gitlab directory
+      ansible.builtin.command: 
+        sudo mkdir -p /srv/gitlab
+      register: my_output
+      changed_when: my_output.rc != 0 
+   
+    - name: Install gitlab
+      ansible.builtin.command: 
+        docker run --detach \
+          --hostname {{ ip }} \
+          --env GITLAB_OMNIBUS_CONFIG="external_url 'http://{{ ip }}'" \
+          --publish 443:443 --publish 80:80 \
+          --name gitlab \
+          --restart always \
+          --volume /srv/gitlab/config:/etc/gitlab \
+          --volume /srv/gitlab/logs:/var/log/gitlab \
+          --volume /srv/gitlab/data:/var/opt/gitlab \
+          --shm-size 256m \
+          gitlab/gitlab-ce:16.5.3-ce.0
+      register: my_output
+      changed_when: my_output.rc != 0 
