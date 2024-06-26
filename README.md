@@ -373,8 +373,11 @@ ret@ret-vm:~/DIPLOM$
 ![diplom](src/test1.png)
 ![diplom](src/test2.png)
 
+```
+```
 CI/CD и terraform. Сделал отдельный тестовый проект с диплоем 1-ой ВМ. 
 [Проект](https://github.com/ChuckBartowski13/diplom/blob/main/terraform_test)
+
 ![diplom](src/ter1.png)
 ---
 ### Установка и настройка CI/CD
